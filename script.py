@@ -172,37 +172,38 @@ freq["Low"] = fuzz.gaussmf(freq.universe,0,5)
 freq["Mid"] = fuzz.gaussmf(freq.universe,9,0.5)
 freq["High"] = fuzz.gaussmf(freq.universe,15,2.5)
 
-Power["lims"] = fuzz.trimf(Power.universe,[0,100,100])
+Power["lims"] = fuzz.trapmf(Power.universe,[0,10,100,100])
 
 Siezure["Low"] = fuzz.gaussmf(Siezure.universe,0,0.1)
 Siezure["High"] = fuzz.gaussmf(Siezure.universe,1,0.1)
 
-rule1 = ctrl.Rule((freq['Low'] | freq['High']) & Power['lims'],Siezure['Low'])
+rule1 = ctrl.Rule(freq['Low'] | freq['High'] & Power['lims'],Siezure['Low'])
 rule2 = ctrl.Rule(freq['Mid'] & Power['lims'], Siezure['High'])
 Siezureness_ctrl = ctrl.ControlSystem([rule1,rule2])
 Siezureness = ctrl.ControlSystemSimulation(Siezureness_ctrl)
-Siezureness.inputs({'freq':10,'Power':100})
+Siezureness.inputs({'freq':8,'Power':.1})
 Siezureness.compute()
 print(Siezureness.output['Siezure'])
 
 freq.view()
-ax = Siezure.view()
+Siezure.view()
 Power.view()
+
 
 #%% dataset Sorting Section
 
 def sortdata(EEGdata,fs):
     siezuremeasure = np.zeros((EEGdata.shape[0]))
-    sortedEEGdata = np.zeros(EEGdata.shape)
+    sortedEEGdata = np.zeros(EEGdata.shape)    
     for k in range(EEGdata.shape[0]):
         fftdata = np.fft.fft(EEGdata[k,:])
-        for i in range(*fftdata.shape):
-            Siezureness.inputs({'freq':i/16,'Power':np.abs(fftdata[i])})
+        for i in range(int(fftdata.shape[0]/2)):
+            Siezureness.inputs({'freq':i*fs/fftdata.shape[0],'Power':np.abs(fftdata[i])})
             Siezureness.compute()
-            siezuremeasure[k] += Siezureness.output['Siezure']
+            siezuremeasure[k] += Siezureness.output['Siezure']>0.8
     sort = np.sort(siezuremeasure)[::-1]    
     for k in range(sort.shape[0]):
-        h = sort[k]==siezuremeasure
+        h = sort[k]==siezuremeasure        
         sortedEEGdata[k,:] = EEGdata[np.where(h)[0][0],:]
     return sortedEEGdata
 def sortdataset(dataset,fs):
@@ -229,6 +230,7 @@ X_train,X_test,Y_train,Y_test = train_test_split(datasetweakordered, ylabel,test
 fuzzyordered = model.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs, validation_split=0.1,callbacks=[callback],class_weight=class_weight)
 model.save("sorteddataset")
 
+#%% Manually Sorting the EEG Channels
 
 negdata3sorted=np.zeros((negdatasize,ch,*t.shape))
 index = 0
