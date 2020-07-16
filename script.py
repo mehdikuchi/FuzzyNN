@@ -5,6 +5,8 @@ Created on Thu Jul 16 12:58:46 2020
 @author: Mahdi Tanbakuchi
 """
 
+#%% Import Section 
+
 import numpy as np
 import random 
 import matplotlib.pyplot as plt
@@ -16,6 +18,8 @@ from sklearn.model_selection import train_test_split
 import skfuzzy as fuzz
 from skfuzzy import control as ctrl
 import pickle
+
+#%% Data Generation Section 
 
 random.seed(0)
 Fr = np.linspace(0,7,30)
@@ -107,6 +111,8 @@ datasetweak = np.expand_dims(datasetweak,-1)
 dummy = np.expand_dims(posdataweak,-1)
 input_shape = dummy.shape[1:]
 
+#%% Deep Network Initialization Section 
+
 model = keras.Sequential(
     [
         # Feature extraction blocks
@@ -155,7 +161,7 @@ weaklabel = model.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs, va
 
 model.save("Unsorted_dataset")
 
-
+#%% Fuzzy Modelling Section
 # New Antecedent/Consequent objects hold universe variables and membership
 # functions
 freq = ctrl.Antecedent(np.arange(0, 16, 1/100), 'freq')
@@ -171,17 +177,19 @@ Power["lims"] = fuzz.trimf(Power.universe,[0,100,100])
 Siezure["Low"] = fuzz.gaussmf(Siezure.universe,0,0.1)
 Siezure["High"] = fuzz.gaussmf(Siezure.universe,1,0.1)
 
-rule1 = ctrl.Rule(freq['Low'] | freq['High'] & Power['lims'],Siezure['Low'])
+rule1 = ctrl.Rule((freq['Low'] | freq['High']) & Power['lims'],Siezure['Low'])
 rule2 = ctrl.Rule(freq['Mid'] & Power['lims'], Siezure['High'])
 Siezureness_ctrl = ctrl.ControlSystem([rule1,rule2])
 Siezureness = ctrl.ControlSystemSimulation(Siezureness_ctrl)
-Siezureness.inputs({'freq':10,'Power':10})
+Siezureness.inputs({'freq':10,'Power':100})
 Siezureness.compute()
 print(Siezureness.output['Siezure'])
 
 freq.view()
 ax = Siezure.view()
 Power.view()
+
+#%% dataset Sorting Section
 
 def sortdata(EEGdata,fs):
     siezuremeasure = np.zeros((EEGdata.shape[0]))
@@ -218,15 +226,7 @@ datasetweakordered.shape
 
 model = keras.models.load_model("Raw_Model")
 X_train,X_test,Y_train,Y_test = train_test_split(datasetweakordered, ylabel,test_size = 0.2 , random_state=2)
-sgd = tf.keras.optimizers.SGD(
-    learning_rate=0.001, momentum=0.9, nesterov=True, name="SGD"
-)
-model.compile(loss="binary_crossentropy",optimizer=sgd,metrics=["accuracy","AUC"])
-callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=3)
-
-class_weight = {0: w0, 1: w1}
 fuzzyordered = model.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs, validation_split=0.1,callbacks=[callback],class_weight=class_weight)
-
 model.save("sorteddataset")
 
 
@@ -259,16 +259,10 @@ sorteddataset.shape
 
 model = keras.models.load_model("Raw_Model")
 X_train,X_test,Y_train,Y_test = train_test_split(sorteddataset, ylabel,test_size = 0.2 , random_state=2)
-sgd = tf.keras.optimizers.SGD(
-    learning_rate=0.001, momentum=0.9, nesterov=True, name="SGD"
-)
-model.compile(loss="binary_crossentropy",optimizer=sgd,metrics=["accuracy","AUC"])
-callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=3)
-
-class_weight = {0: w0, 1: w1}
 sortedmanual = model.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs, validation_split=0.1,callbacks=[callback],class_weight=class_weight)
 
 model.save("sortedmanual")
 
+#%% Saving Section 
 with open("history","wb") as file:
     pickle.dumps([sortedmanual,fuzzyordered,weaklabel])
