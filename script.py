@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Jul 16 12:58:46 2020
-
 @author: Mahdi Tanbakuchi
 """
 
@@ -143,23 +141,23 @@ model = keras.Sequential(
 model.summary()
 model.save("Raw_Model")
 
-
+#%% Trainig the model on the unsorted EEG data
 batch_size = 300
 epochs = 1500
 num_classes = 2
-model = keras.models.load_model("Raw_Model")
+modelmain = keras.models.load_model("Raw_Model")
 ylabel = keras.utils.to_categorical(classid, num_classes)
 X_train,X_test,Y_train,Y_test = train_test_split(datasetweak,ylabel,test_size = 0.2 , random_state=2)
 sgd = tf.keras.optimizers.SGD(
     learning_rate=0.001, momentum=0.9, nesterov=True, name="SGD"
 )
-model.compile(loss="binary_crossentropy",optimizer=sgd,metrics=["accuracy","AUC"])
+modelmain.compile(loss="binary_crossentropy",optimizer=sgd,metrics=["accuracy","AUC"])
 callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=3)
 
 class_weight = {0: w0, 1: w1}
-weaklabel = model.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs, validation_split=0.1,callbacks=[callback],class_weight=class_weight)
+weaklabel = modelmain.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs, validation_split=0.1,callbacks=[callback],class_weight=class_weight)
 
-model.save("Unsorted_dataset")
+modelmain.save("Unsorted_dataset")
 
 #%% Fuzzy Modelling Section
 # New Antecedent/Consequent objects hold universe variables and membership
@@ -212,6 +210,7 @@ def sortdataset(dataset,fs):
         sorteddataset[i] = sortdata(dataset[i],fs)
     return sorteddataset
 
+#%% Sorting and saving the sorted dataset
 orderedposdataweak = sortdataset(posdataweak,fs)
 
 with open("posdatasetsorted","wb") as file:
@@ -220,15 +219,28 @@ with open("posdatasetsorted","wb") as file:
 orederednegdataweak = sortdataset(negdataweak,fs)
 with open("negdatasetsorted","wb") as file:
     pickle.dump(orederednegdataweak,file)
-    
+
+#%% Loading the sorted dataset 
+with open("posdatasetsorted","rb") as file:
+    orderedposdataweak = pickle.load(file)    
+with open("negdatasetsorted","rb") as file:
+    orederednegdataweak = pickle.load(file)
+
+#%% Compiling the whole sorted dataset and training the model
 datasetweakordered = np.concatenate((orderedposdataweak,orederednegdataweak))
 datasetweakordered = np.expand_dims(datasetweakordered,-1)
 datasetweakordered.shape
 
-model = keras.models.load_model("Raw_Model")
+modelsorted = keras.models.load_model("Raw_Model")
+ylabel = keras.utils.to_categorical(classid, num_classes)
 X_train,X_test,Y_train,Y_test = train_test_split(datasetweakordered, ylabel,test_size = 0.2 , random_state=2)
-fuzzyordered = model.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs, validation_split=0.1,callbacks=[callback],class_weight=class_weight)
-model.save("sorteddataset")
+sgd = tf.keras.optimizers.SGD(
+    learning_rate=0.001, momentum=0.9, nesterov=True, name="SGD"
+)
+modelsorted.compile(loss="binary_crossentropy",optimizer=sgd,metrics=["accuracy","AUC"])
+callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=3)
+fuzzyordered = modelsorted.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs, validation_split=0.1,callbacks=[callback],class_weight=class_weight)
+modelsorted.save("sorteddataset")
 
 #%% Manually Sorting the EEG Channels
 
@@ -258,14 +270,40 @@ for pos in positions:
 sorteddataset= np.expand_dims(np.concatenate((posdataweak,negdata3sorted)),-1)
 sorteddataset.shape
 
-
-model = keras.models.load_model("Raw_Model")
+#%% Train the model on the manually sorted dataset
+modelmanual = keras.models.load_model("Raw_Model")
+ylabel = keras.utils.to_categorical(classid, num_classes)
 X_train,X_test,Y_train,Y_test = train_test_split(sorteddataset, ylabel,test_size = 0.2 , random_state=2)
-sortedmanual = model.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs, validation_split=0.1,callbacks=[callback],class_weight=class_weight)
-
-model.save("sortedmanual")
+sgd = tf.keras.optimizers.SGD(
+    learning_rate=0.001, momentum=0.9, nesterov=True, name="SGD"
+)
+modelmanual.compile(loss="binary_crossentropy",optimizer=sgd,metrics=["accuracy","AUC"])
+callback = tf.keras.callbacks.EarlyStopping(monitor='accuracy', patience=3)
+sortedmanual = modelmanual.fit(X_train, Y_train, batch_size=batch_size, epochs=epochs, validation_split=0.1,callbacks=[callback],class_weight=class_weight)
+modelmanual.save("sortedmanual")
 
 #%% Saving Section 
 with open("history","wb") as file:
     pickle.dump([sortedmanual,fuzzyordered,weaklabel],file)
     
+#%% Loading and plotting results
+with open("history","rb") as file:
+    histories = pickle.load(file)
+
+# Plotting accuracies vs Epoch numbers
+ax = plt.subplot(121)
+plt.plot(range(len(histories[1]['accuracy'])),histories[1]['accuracy'])
+plt.plot(range(len(histories[1]['AUC'])),histories[1]['AUC'])
+ax.set_title("Fuzzy Ordered")
+plt.xlabel("Epoch Numbers")
+plt.ylabel("Accuracy")
+plt.legend(["Accuracy","AUC"])
+ax2 = plt.subplot(122)
+plt.plot(range(len(histories[2]['accuracy'])),histories[2]['accuracy'])
+plt.plot(range(len(histories[2]['AUC'])),histories[2]['AUC'])
+ax2.set_title("Raw Signals")
+plt.xlabel("Epoch Numbers")
+plt.legend(["Accuracy","AUC"])
+# Plotting AUC vs Epoch numbers
+ax2 = plt.subplot(121)
+plt.legend(["Accuracy","AUC"])
