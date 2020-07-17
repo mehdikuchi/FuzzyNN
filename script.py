@@ -267,4 +267,5 @@ model.save("sortedmanual")
 
 #%% Saving Section 
 with open("history","wb") as file:
-    pickle.dumps([sortedmanual,fuzzyordered,weaklabel])
+    pickle.dump([sortedmanual,fuzzyordered,weaklabel],file)
+    
